@@ -12,13 +12,10 @@ pip install -r requirements.txt
 cp .env.example .env
 # Editar .env con los datos de tu instancia Odoo
 
-# 3. Verificar conexión a Odoo
-python -c "from src.odoo.client import odoo; print(odoo.test_connection())"
+# 3. Arrancar servidor
+python -m uvicorn src.main:app --reload --port 8001
 
-# 4. Arrancar servidor
-uvicorn src.main:app --reload --port 8001
-
-# 5. Health check
+# 4. Health check
 curl http://localhost:8001/health
 ```
 
@@ -44,6 +41,50 @@ curl http://localhost:8001/health
 
 ## Configurar en Heinzbot
 
-En el menú **Conectores** de Heinzbot:
-- **URL**: `https://tu-dominio.com/mcp`
-- **API Key**: el valor de `MCP_API_KEY` en tu `.env`
+### Primera vez
+
+**1.** Obtener token personal (reemplaza con tus credenciales de Odoo):
+
+```bash
+curl -X POST https://www.heinzsport.com/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "tu@email.com", "password": "tu_password"}'
+```
+
+**2.** En Heinzbot → menú **Conectores** → agregar nuevo conector:
+- **URL**: `https://www.heinzsport.com/mcp`
+- **API Key**: `Bearer <token del paso anterior>`
+
+### Renovar token (caduca cada 8 horas)
+
+Cuando Heinzbot deje de responder sobre Odoo, el token expiró. Para renovarlo:
+
+**1.** Ejecutar en Putty (SSH al VPS) o en cualquier terminal:
+
+```bash
+curl -X POST https://www.heinzsport.com/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "tu@email.com", "password": "tu_password"}'
+```
+
+**2.** Copiar el valor de `token` de la respuesta.
+
+**3.** En Heinzbot → **Conectores** → **MCP Odoo** → editar → pegar `Bearer <nuevo_token>` en el campo **API Key**.
+
+## Producción (VPS Hostinger)
+
+El servidor corre como servicio systemd en `/opt/odoo-mcp`:
+
+```bash
+# Ver estado
+systemctl status odoo-mcp
+
+# Reiniciar
+systemctl restart odoo-mcp
+
+# Ver logs en tiempo real
+journalctl -u odoo-mcp -f
+
+# Actualizar código desde GitHub
+cd /opt/odoo-mcp && git pull && systemctl restart odoo-mcp
+```
