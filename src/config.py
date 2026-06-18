@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     jwt_expire_hours: int = 8
 
     audit_log_path: str = "audit.jsonl"
+    work_centers_path: str = "work_centers.json"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

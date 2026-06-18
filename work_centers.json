@@ -1,0 +1,14 @@
+[
+  {
+    "name": "Sede Carabayllo",
+    "latitude": -11.924449,
+    "longitude": -77.018218,
+    "radius_meters": 20
+  },
+  {
+    "name": "Sede Comas",
+    "latitude": -11.899348,
+    "longitude": -77.031433,
+    "radius_meters": 20
+  }
+]

@@ -3,8 +3,10 @@ from .manufacturing import (
     create_purchase_order, confirm_purchase_order,
     create_manufacturing_order, confirm_manufacturing_order,
 )
+from .attendance import check_in_attendance, check_out_attendance, get_attendance_status
 
 TOOL_DEFINITIONS = [
+    # ── Inventario ────────────────────────────────────────────────────────────
     {
         "name": "get_stock_by_product",
         "description": "Consulta el stock disponible de un producto en todos los almacenes internos de Odoo.",
@@ -39,6 +41,7 @@ TOOL_DEFINITIONS = [
             "required": ["warehouse_name"],
         },
     },
+    # ── Órdenes de compra ─────────────────────────────────────────────────────
     {
         "name": "create_purchase_order",
         "description": "Crea una orden de compra en estado borrador en Odoo.",
@@ -75,6 +78,7 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    # ── Órdenes de producción ─────────────────────────────────────────────────
     {
         "name": "create_manufacturing_order",
         "description": "Crea una orden de producción (MO) en estado borrador en Odoo.",
@@ -100,6 +104,47 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    # ── Asistencias ───────────────────────────────────────────────────────────
+    {
+        "name": "check_in_attendance",
+        "description": (
+            "Registra la entrada (check-in) del empleado en Odoo. "
+            "Valida que el empleado esté dentro de los 20 metros de una sede autorizada. "
+            "Requiere la ubicación GPS actual del dispositivo."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "latitude": {"type": "number", "description": "Latitud GPS actual del dispositivo (ej: -11.924449)."},
+                "longitude": {"type": "number", "description": "Longitud GPS actual del dispositivo (ej: -77.018218)."},
+            },
+            "required": ["latitude", "longitude"],
+        },
+    },
+    {
+        "name": "check_out_attendance",
+        "description": (
+            "Registra la salida (check-out) del empleado en Odoo. "
+            "Valida que el empleado esté dentro de los 20 metros de una sede autorizada. "
+            "Requiere la ubicación GPS actual del dispositivo."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "latitude": {"type": "number", "description": "Latitud GPS actual del dispositivo (ej: -11.924449)."},
+                "longitude": {"type": "number", "description": "Longitud GPS actual del dispositivo (ej: -77.018218)."},
+            },
+            "required": ["latitude", "longitude"],
+        },
+    },
+    {
+        "name": "get_attendance_status",
+        "description": "Consulta el estado de asistencia del empleado hoy: si está trabajando, hora de entrada, horas acumuladas.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
 ]
 
 TOOL_HANDLERS: dict[str, callable] = {
@@ -110,4 +155,7 @@ TOOL_HANDLERS: dict[str, callable] = {
     "confirm_purchase_order": confirm_purchase_order,
     "create_manufacturing_order": create_manufacturing_order,
     "confirm_manufacturing_order": confirm_manufacturing_order,
+    "check_in_attendance": check_in_attendance,
+    "check_out_attendance": check_out_attendance,
+    "get_attendance_status": get_attendance_status,
 }
