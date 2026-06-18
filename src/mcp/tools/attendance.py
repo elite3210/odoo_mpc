@@ -36,6 +36,11 @@ def _nearest_center(latitude: float, longitude: float) -> tuple[dict, float]:
     return best, round(distance, 1)
 
 
+def _city_from_center(center: dict) -> str:
+    # Extrae el nombre de la ciudad/distrito quitando el prefijo "Sede "
+    return center["name"].replace("Sede ", "").strip()
+
+
 # ── Utilidades de tiempo ──────────────────────────────────────────────────────
 
 def _utc_now_str() -> str:
@@ -64,6 +69,12 @@ def _today_range_utc() -> tuple[str, str]:
     utc_start = lima_midnight - datetime.timedelta(hours=LIMA_UTC_OFFSET)
     utc_end = utc_start + datetime.timedelta(days=1)
     return utc_start.strftime("%Y-%m-%d %H:%M:%S"), utc_end.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _semana_anio(fecha: datetime.date) -> str:
+    # Semana ISO (lunes a domingo) — da "Semana 25 - 2026" para el 17/06/2026
+    iso_year, iso_week, _ = fecha.isocalendar()
+    return f"Semana {iso_week} - {iso_year}"
 
 
 # ── Odoo ──────────────────────────────────────────────────────────────────────
@@ -111,22 +122,31 @@ def check_in_attendance(odoo: OdooClient, user_email: str, latitude: float, long
             f"Para registrar tu salida di: 'registra mi salida'."
         )
 
+    lima_ahora = _lima_now()
+    semana = _semana_anio(lima_ahora.date())
+    city = _city_from_center(center)
+
     try:
         att_id = odoo.create("hr.attendance", {
             "employee_id": employee["id"],
             "check_in": _utc_now_str(),
+            "in_latitude": latitude,
+            "in_longitude": longitude,
+            "in_city": city,
+            "in_browser": semana,
         })
         log_write("check_in_attendance", {
             "user": user_email, "employee": employee["name"],
             "lat": latitude, "lon": longitude,
             "sede": center["name"], "distancia_m": distance,
+            "semana": semana,
         }, {"att_id": att_id})
-        hora = _lima_now().strftime("%H:%M")
         return (
             f"Entrada registrada.\n\n"
             f"Empleado: {employee['name']}\n"
-            f"Hora: {hora} (Lima)\n"
-            f"Sede: {center['name']}  (a {distance}m del centro)"
+            f"Hora: {lima_ahora.strftime('%H:%M')} (Lima)\n"
+            f"Sede: {center['name']}  (a {distance}m)\n"
+            f"Semana: {semana}"
         )
     except xmlrpc.client.Fault as e:
         log_write("check_in_attendance", {"user": user_email}, str(e), is_error=True)
@@ -154,9 +174,16 @@ def check_out_attendance(odoo: OdooClient, user_email: str, latitude: float, lon
             f"Registra primero tu entrada diciendo: 'registra mi entrada'."
         )
 
+    city = _city_from_center(center)
+
     try:
         now_utc = _utc_now_str()
-        odoo.write("hr.attendance", [open_att["id"]], {"check_out": now_utc})
+        odoo.write("hr.attendance", [open_att["id"]], {
+            "check_out": now_utc,
+            "out_latitude": latitude,
+            "out_longitude": longitude,
+            "out_city": city,
+        })
         log_write("check_out_attendance", {
             "user": user_email, "employee": employee["name"],
             "lat": latitude, "lon": longitude,
@@ -194,7 +221,7 @@ def get_attendance_status(odoo: OdooClient, user_email: str = "") -> str:
             ["check_in", ">=", start_utc],
             ["check_in", "<", end_utc],
         ],
-        fields=["check_in", "check_out", "worked_hours"],
+        fields=["check_in", "check_out", "worked_hours", "in_city", "in_browser"],
         order="check_in asc",
         limit=10,
     )
@@ -210,13 +237,15 @@ def get_attendance_status(odoo: OdooClient, user_email: str = "") -> str:
 
     for r in records:
         entrada = _to_lima(_parse_odoo_dt(r["check_in"]))
+        semana = r.get("in_browser") or ""
+        sede = r.get("in_city") or ""
         if r["check_out"]:
             salida = _to_lima(_parse_odoo_dt(r["check_out"]))
             trabajado = (r.get("worked_hours") or 0) * 3600
             total_segundos += trabajado
             h = int(trabajado // 3600)
             m = int((trabajado % 3600) // 60)
-            lines.append(f"  {entrada.strftime('%H:%M')} → {salida.strftime('%H:%M')}  ({h}h {m}m)")
+            lines.append(f"  {entrada.strftime('%H:%M')} → {salida.strftime('%H:%M')}  ({h}h {m}m)  [{sede}]")
         else:
             activo = True
             ahora = _lima_now()
@@ -224,11 +253,13 @@ def get_attendance_status(odoo: OdooClient, user_email: str = "") -> str:
             total_segundos += transcurrido
             h = int(transcurrido // 3600)
             m = int((transcurrido % 3600) // 60)
-            lines.append(f"  {entrada.strftime('%H:%M')} → EN CURSO  ({h}h {m}m)")
+            lines.append(f"  {entrada.strftime('%H:%M')} → EN CURSO  ({h}h {m}m)  [{sede}]")
 
+    if semana:
+        lines.append(f"\n{semana}")
     th = int(total_segundos // 3600)
     tm = int((total_segundos % 3600) // 60)
-    lines.append(f"\nTotal hoy: {th}h {tm}m")
+    lines.append(f"Total hoy: {th}h {tm}m")
     lines.append(f"Estado: {'TRABAJANDO' if activo else 'FUERA'}")
 
     return "\n".join(lines)
