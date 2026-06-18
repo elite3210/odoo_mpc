@@ -152,3 +152,71 @@ def confirm_manufacturing_order(odoo: OdooClient, user_email: str, mo_number: st
     except xmlrpc.client.Fault as e:
         log_write("confirm_manufacturing_order", {"user": user_email, "mo": ref}, str(e), is_error=True)
         return f"Error de Odoo: {e.faultString}"
+
+
+def register_production_output(odoo: OdooClient, user_email: str, product_name: str, quantity: float) -> str:
+    mos = odoo.search_read(
+        "mrp.production",
+        [["state", "in", ["confirmed", "progress"]], ["product_id.name", "ilike", product_name]],
+        fields=["id", "name", "product_id", "product_qty", "qty_produced", "product_uom_id"],
+        limit=5,
+        order="date_start asc",
+    )
+
+    if not mos:
+        return f'No encontré órdenes de producción abiertas para "{product_name}".'
+
+    if len(mos) > 1:
+        lines = [f'Encontré {len(mos)} OPs abiertas para "{product_name}". Especifica más el nombre:\n']
+        for mo in mos:
+            pendiente = mo["product_qty"] - mo["qty_produced"]
+            uom = mo["product_uom_id"][1] if mo.get("product_uom_id") else ""
+            lines.append(f'  {mo["name"]}: {mo["product_id"][1]} — pendiente: {pendiente:,.2f} {uom}')
+        return "\n".join(lines)
+
+    mo = mos[0]
+    mo_id = mo["id"]
+    pendiente = mo["product_qty"] - mo["qty_produced"]
+    uom = mo["product_uom_id"][1] if mo.get("product_uom_id") else ""
+
+    if quantity <= 0:
+        return "La cantidad debe ser mayor a cero."
+
+    if quantity > pendiente:
+        return (
+            f'La cantidad {quantity:,.2f} supera lo pendiente en {mo["name"]}.\n'
+            f'Producto: {mo["product_id"][1]}\n'
+            f'Planificado: {mo["product_qty"]:,.2f} {uom}  |  Ya producido: {mo["qty_produced"]:,.2f} {uom}  |  Pendiente: {pendiente:,.2f} {uom}'
+        )
+
+    try:
+        odoo.write("mrp.production", [mo_id], {"qty_producing": quantity})
+        result = odoo.execute("mrp.production", "button_mark_done", [[mo_id]], {})
+
+        # Si Odoo devuelve el wizard de backorder, llamamos action_backorder para dejar la OP abierta
+        if isinstance(result, dict) and result.get("res_model") == "mrp.production.backorder":
+            wizard_id = result.get("res_id")
+            if wizard_id:
+                odoo.execute("mrp.production.backorder", "action_backorder", [[wizard_id]], {})
+
+        nuevo_producido = mo["qty_produced"] + quantity
+        restante = mo["product_qty"] - nuevo_producido
+
+        log_write("register_production_output", {
+            "user": user_email,
+            "mo": mo["name"],
+            "product": mo["product_id"][1],
+            "quantity": quantity,
+        }, {"mo_id": mo_id, "nuevo_producido": nuevo_producido, "restante": restante})
+
+        return (
+            f"Ingreso registrado en almacén Carabayllo.\n\n"
+            f'OP: {mo["name"]}\n'
+            f'Producto: {mo["product_id"][1]}\n'
+            f"Cantidad ingresada ahora: {quantity:,.2f} {uom}\n"
+            f"Total producido: {nuevo_producido:,.2f} / {mo['product_qty']:,.2f} {uom}\n"
+            f"Pendiente: {restante:,.2f} {uom}"
+        )
+    except xmlrpc.client.Fault as e:
+        log_write("register_production_output", {"user": user_email, "mo": mo["name"]}, str(e), is_error=True)
+        return f"Error de Odoo: {e.faultString}"

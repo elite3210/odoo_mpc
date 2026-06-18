@@ -2,6 +2,7 @@ from .inventory import get_stock_by_product, get_low_stock_products, get_stock_b
 from .manufacturing import (
     create_purchase_order, confirm_purchase_order,
     create_manufacturing_order, confirm_manufacturing_order,
+    register_production_output,
 )
 from .attendance import check_in_attendance, check_out_attendance, get_attendance_status
 
@@ -104,6 +105,29 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    # ── Ingreso de producción ─────────────────────────────────────────────────
+    {
+        "name": "register_production_output",
+        "description": (
+            "Registra el ingreso parcial o total de producto terminado al almacén desde una Orden de Producción abierta en Odoo. "
+            "Busca la OP confirmada del producto indicado y mueve la cantidad al stock de Carabayllo. "
+            "La OP queda abierta con el restante pendiente si la cantidad es parcial."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "product_name": {
+                    "type": "string",
+                    "description": "Nombre parcial o código del producto fabricado (ej: 'camiseta roja' o código QR escaneado).",
+                },
+                "quantity": {
+                    "type": "number",
+                    "description": "Cantidad a ingresar al almacén en esta operación.",
+                },
+            },
+            "required": ["product_name", "quantity"],
+        },
+    },
     # ── Asistencias ───────────────────────────────────────────────────────────
     {
         "name": "check_in_attendance",
@@ -155,6 +179,7 @@ TOOL_HANDLERS: dict[str, callable] = {
     "confirm_purchase_order": confirm_purchase_order,
     "create_manufacturing_order": create_manufacturing_order,
     "confirm_manufacturing_order": confirm_manufacturing_order,
+    "register_production_output": register_production_output,
     "check_in_attendance": check_in_attendance,
     "check_out_attendance": check_out_attendance,
     "get_attendance_status": get_attendance_status,
