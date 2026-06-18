@@ -154,6 +154,40 @@ def confirm_manufacturing_order(odoo: OdooClient, user_email: str, mo_number: st
         return f"Error de Odoo: {e.faultString}"
 
 
+def get_open_manufacturing_orders(odoo: OdooClient, user_email: str = "", product_name: str = "") -> str:
+    domain = [["state", "in", ["confirmed", "progress", "to_close"]]]
+    if product_name:
+        domain.append(["product_id.name", "ilike", product_name])
+
+    mos = odoo.search_read(
+        "mrp.production",
+        domain,
+        fields=["name", "product_id", "product_qty", "qty_produced", "product_uom_id", "state", "date_start"],
+        limit=50,
+        order="date_start asc",
+    )
+
+    if not mos:
+        msg = f'No hay órdenes de producción abiertas para "{product_name}".' if product_name else "No hay órdenes de producción abiertas."
+        return msg
+
+    STATE_LABELS = {"confirmed": "Confirmada", "progress": "En proceso", "to_close": "Por cerrar"}
+    lines = [f"Órdenes de producción abiertas ({len(mos)}):\n"]
+
+    for mo in mos:
+        pendiente = mo["product_qty"] - mo["qty_produced"]
+        uom = mo["product_uom_id"][1] if mo.get("product_uom_id") else ""
+        estado = STATE_LABELS.get(mo["state"], mo["state"])
+        fecha = mo["date_start"][:10] if mo.get("date_start") else "—"
+        lines.append(
+            f'  {mo["name"]}  |  {mo["product_id"][1]}\n'
+            f'    Estado: {estado}  |  Fecha: {fecha}\n'
+            f'    Planificado: {mo["product_qty"]:,.2f} {uom}  |  Producido: {mo["qty_produced"]:,.2f}  |  Pendiente: {pendiente:,.2f}\n'
+        )
+
+    return "\n".join(lines)
+
+
 def register_production_output(odoo: OdooClient, user_email: str, product_name: str, quantity: float) -> str:
     mos = odoo.search_read(
         "mrp.production",

@@ -2,7 +2,7 @@ from .inventory import get_stock_by_product, get_low_stock_products, get_stock_b
 from .manufacturing import (
     create_purchase_order, confirm_purchase_order,
     create_manufacturing_order, confirm_manufacturing_order,
-    register_production_output,
+    register_production_output, get_open_manufacturing_orders,
 )
 from .attendance import check_in_attendance, check_out_attendance, get_attendance_status
 
@@ -105,6 +105,20 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    # ── Órdenes de manufactura ────────────────────────────────────────────────
+    {
+        "name": "get_open_manufacturing_orders",
+        "description": "Lista las órdenes de producción abiertas en Odoo (confirmadas, en proceso o por cerrar). Muestra producto, cantidad planificada, producida y pendiente.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "product_name": {
+                    "type": "string",
+                    "description": "Filtrar por nombre parcial del producto (opcional). Sin filtro lista todas.",
+                },
+            },
+        },
+    },
     # ── Ingreso de producción ─────────────────────────────────────────────────
     {
         "name": "register_production_output",
@@ -179,6 +193,7 @@ TOOL_HANDLERS: dict[str, callable] = {
     "confirm_purchase_order": confirm_purchase_order,
     "create_manufacturing_order": create_manufacturing_order,
     "confirm_manufacturing_order": confirm_manufacturing_order,
+    "get_open_manufacturing_orders": get_open_manufacturing_orders,
     "register_production_output": register_production_output,
     "check_in_attendance": check_in_attendance,
     "check_out_attendance": check_out_attendance,
